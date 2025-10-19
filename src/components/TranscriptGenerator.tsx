@@ -15,31 +15,51 @@ export const TranscriptGenerator = ({ file }: TranscriptGeneratorProps) => {
 
   const generateTranscript = async () => {
     setGenerating(true);
-    toast.info("Generating transcript from SCORM content...");
+    toast.info("Searching for transcript files in SCORM package...");
     
-    // Simulate transcript generation
-    setTimeout(() => {
-      const sampleTranscript = `WEBVTT
-
-00:00:00.000 --> 00:00:05.000
-Welcome to this comprehensive SCORM course module.
-
-00:00:05.000 --> 00:00:10.000
-In this session, we will explore the key concepts and principles.
-
-00:00:10.000 --> 00:00:15.000
-Let's begin by understanding the fundamental components.
-
-00:00:15.000 --> 00:00:20.000
-The content is structured to provide maximum learning value.
-
-00:00:20.000 --> 00:00:25.000
-Pay attention to the interactive elements throughout the course.`;
+    try {
+      const JSZip = (await import("jszip")).default;
+      const zip = new JSZip();
+      const contents = await zip.loadAsync(file);
       
-      setTranscript(sampleTranscript);
+      // Look for subtitle/transcript files
+      const transcriptExtensions = ['.vtt', '.srt', '.txt', '.sub'];
+      let foundTranscript = "";
+      
+      for (const [filename, zipEntry] of Object.entries(contents.files)) {
+        if (!zipEntry.dir && transcriptExtensions.some(ext => filename.toLowerCase().endsWith(ext))) {
+          const content = await zipEntry.async("string");
+          foundTranscript += `\n\n=== ${filename} ===\n\n${content}`;
+        }
+      }
+      
+      if (foundTranscript) {
+        setTranscript(foundTranscript);
+        toast.success("Found transcript files!");
+      } else {
+        // Generate placeholder that explains no transcripts found
+        const placeholderTranscript = `No transcript files (.vtt, .srt) found in SCORM package.
+
+To generate transcripts from videos:
+1. Extract videos using the Videos tab
+2. Use external tools like:
+   - YouTube's auto-captioning (upload video first)
+   - OpenAI Whisper API
+   - Google Speech-to-Text
+   - AWS Transcribe
+
+The extracted transcript files can then be re-imported into your SCORM package.`;
+        
+        setTranscript(placeholderTranscript);
+        toast.info("No transcript files found in package");
+      }
+      
       setGenerating(false);
-      toast.success("Transcript generated successfully!");
-    }, 2000);
+    } catch (error) {
+      console.error("Error extracting transcripts:", error);
+      toast.error("Failed to extract transcripts");
+      setGenerating(false);
+    }
   };
 
   const downloadTranscript = () => {

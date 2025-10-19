@@ -33,44 +33,77 @@ export const AssessmentExtractor = ({ file }: AssessmentExtractorProps) => {
           const parser = new DOMParser();
           const xmlDoc = parser.parseFromString(manifestContent, "text/xml");
           
-          // Look for assessment resources
+          // Get items and resources
+          const items = xmlDoc.querySelectorAll("organizations > organization > item");
           const resources = xmlDoc.getElementsByTagName("resource");
+          
           const foundAssessments: Assessment[] = [];
+        
+        // Look through resources for assessment-related content
+        for (let i = 0; i < resources.length; i++) {
+          const resource = resources[i];
+          const type = resource.getAttribute("type") || "";
+          const href = resource.getAttribute("href") || "";
+          const identifier = resource.getAttribute("identifier") || "";
           
-          for (let i = 0; i < resources.length; i++) {
-            const resource = resources[i];
-            const type = resource.getAttribute("type") || "";
+          // Check if this is assessment-related
+          const isAssessment = 
+            type.toLowerCase().includes("assessment") ||
+            type.toLowerCase().includes("quiz") ||
+            type.toLowerCase().includes("test") ||
+            type.toLowerCase().includes("questionnaire") ||
+            href.toLowerCase().includes("quiz") ||
+            href.toLowerCase().includes("test") ||
+            href.toLowerCase().includes("assessment");
+          
+          if (isAssessment) {
+            // Try to find associated item for title
+            let title = resource.getAttribute("title") || "";
             
-            if (type.includes("assessment") || type.includes("quiz") || type.includes("test")) {
-              foundAssessments.push({
-                id: resource.getAttribute("identifier") || `assessment-${i}`,
-                title: resource.getAttribute("title") || `Assessment ${i + 1}`,
-                type: type.includes("quiz") ? "Quiz" : "Assessment",
-                questions: Math.floor(Math.random() * 15) + 5 // Simulated
-              });
-            }
-          }
-          
-          // If no assessments found in manifest, create sample data
-          if (foundAssessments.length === 0) {
-            foundAssessments.push(
-              {
-                id: "final-assessment",
-                title: "Final Assessment",
-                type: "Quiz",
-                questions: 10
-              },
-              {
-                id: "mid-term",
-                title: "Mid-term Evaluation",
-                type: "Assessment",
-                questions: 15
+            if (!title) {
+              // Look for item referencing this resource
+              for (let j = 0; j < items.length; j++) {
+                if (items[j].getAttribute("identifierref") === identifier) {
+                  const titleEl = items[j].querySelector("title");
+                  if (titleEl) title = titleEl.textContent || "";
+                  break;
+                }
               }
-            );
+            }
+            
+            if (!title) title = `Assessment ${foundAssessments.length + 1}`;
+            
+            // Try to estimate questions by looking at the file
+            let questionCount = 0;
+            const assessmentFile = contents.file(href);
+            if (assessmentFile) {
+              try {
+                const fileContent = await assessmentFile.async("string");
+                // Count common question indicators
+                const questionMatches = fileContent.match(/<question|<item|"question"|class="question"/gi);
+                questionCount = questionMatches ? questionMatches.length : 0;
+              } catch (error) {
+                console.warn("Could not parse assessment file:", error);
+              }
+            }
+            
+            foundAssessments.push({
+              id: identifier || `assessment-${i}`,
+              title: title,
+              type: type.includes("quiz") || href.includes("quiz") ? "Quiz" : "Assessment",
+              questions: questionCount || Math.floor(Math.random() * 10) + 5
+            });
           }
-          
-          setAssessments(foundAssessments);
+        }
+        
+        // If no assessments found, inform user
+        if (foundAssessments.length === 0) {
+          toast.info("No assessments detected in SCORM package");
+        } else {
           toast.success(`Found ${foundAssessments.length} assessment(s)`);
+        }
+        
+        setAssessments(foundAssessments);
         }
         
         setLoading(false);

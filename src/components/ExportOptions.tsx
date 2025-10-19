@@ -17,22 +17,38 @@ export const ExportOptions = ({ file }: ExportOptionsProps) => {
   const [converting, setConverting] = useState(false);
   const [progress, setProgress] = useState(0);
 
-  const startConversion = () => {
+  const startConversion = async () => {
     setConverting(true);
     setProgress(0);
-    toast.info(`Starting conversion to ${format.toUpperCase()}...`);
+    
+    toast.info("SCORM to video conversion requires server-side processing...");
 
+    // Simulate progress for demonstration
     const interval = setInterval(() => {
       setProgress((prev) => {
-        if (prev >= 100) {
+        if (prev >= 90) {
           clearInterval(interval);
-          setConverting(false);
-          toast.success(`Successfully converted to ${format.toUpperCase()}!`);
-          return 100;
+          return 90;
         }
         return prev + 10;
       });
     }, 500);
+
+    // After progress reaches 90%, show info message
+    setTimeout(() => {
+      clearInterval(interval);
+      setProgress(100);
+      setConverting(false);
+      
+      toast.info(
+        `SCORM to ${format.toUpperCase()} conversion requires:\n` +
+        "1. Video recording tools (Puppeteer, Playwright)\n" +
+        "2. FFmpeg for encoding\n" +
+        "3. Server infrastructure\n\n" +
+        "Consider using cloud services or dedicated SCORM conversion tools for production use.",
+        { duration: 10000 }
+      );
+    }, 5000);
   };
 
   return (
