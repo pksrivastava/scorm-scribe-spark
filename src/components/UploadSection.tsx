@@ -35,6 +35,15 @@ export const UploadSection = ({ onFileUpload }: UploadSectionProps) => {
     [onFileUpload]
   );
 
+  const handleDemoMode = () => {
+    // Create a dummy file for demo purposes
+    const demoContent = "Demo SCORM Package";
+    const blob = new Blob([demoContent], { type: 'application/zip' });
+    const demoFile = new File([blob], 'demo-scorm-package.zip', { type: 'application/zip' });
+    onFileUpload(demoFile);
+    toast.success("Demo SCORM package loaded!");
+  };
+
   return (
     <Card
       className="relative overflow-hidden border-2 border-dashed border-primary/30 bg-gradient-to-br from-card via-card/80 to-card/50 hover:border-primary/60 transition-all duration-300"

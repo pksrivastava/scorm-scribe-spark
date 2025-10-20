@@ -14,7 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      scorm_jobs: {
+        Row: {
+          assessment_count: number | null
+          created_at: string | null
+          filename: string
+          id: string
+          metadata: Json | null
+          status: string
+          transcript_count: number | null
+          updated_at: string | null
+          video_count: number | null
+        }
+        Insert: {
+          assessment_count?: number | null
+          created_at?: string | null
+          filename: string
+          id?: string
+          metadata?: Json | null
+          status?: string
+          transcript_count?: number | null
+          updated_at?: string | null
+          video_count?: number | null
+        }
+        Update: {
+          assessment_count?: number | null
+          created_at?: string | null
+          filename?: string
+          id?: string
+          metadata?: Json | null
+          status?: string
+          transcript_count?: number | null
+          updated_at?: string | null
+          video_count?: number | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

@@ -9,10 +9,36 @@ import { TranscriptGenerator } from "@/components/TranscriptGenerator";
 import { AssessmentExtractor } from "@/components/AssessmentExtractor";
 import { ScormPlayer } from "@/components/ScormPlayer";
 import { ExportOptions } from "@/components/ExportOptions";
+import { ProcessingStatus } from "@/components/ProcessingStatus";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 const Index = () => {
   const [scormFile, setScormFile] = useState<File | null>(null);
-  const [extractedData, setExtractedData] = useState<any>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
+
+  const handleFileUpload = async (file: File) => {
+    setScormFile(file);
+    
+    // Create processing job in database
+    const { data, error } = await supabase
+      .from('scorm_jobs')
+      .insert({
+        filename: file.name,
+        status: 'processing',
+        metadata: { size: file.size, type: file.type }
+      })
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error creating job:', error);
+      toast.error('Failed to create processing job');
+    } else if (data) {
+      setJobId(data.id);
+      toast.success('Processing job created!');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -44,7 +70,14 @@ const Index = () => {
         {/* Upload Section */}
         {!scormFile && (
           <div className="mb-8">
-            <UploadSection onFileUpload={setScormFile} />
+            <UploadSection onFileUpload={handleFileUpload} />
+          </div>
+        )}
+
+        {/* Processing Status */}
+        {jobId && (
+          <div className="mb-6">
+            <ProcessingStatus jobId={jobId} />
           </div>
         )}
 

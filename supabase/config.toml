@@ -1,1 +1,4 @@
 project_id = "fezlosfscacuarrjlxam"
+
+[functions.transcribe-video]
+verify_jwt = false

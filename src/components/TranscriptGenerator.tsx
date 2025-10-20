@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { MessageSquare, Download, Wand2 } from "lucide-react";
+import { MessageSquare, Download, Wand2, Loader2 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 interface TranscriptGeneratorProps {
   file: File;
@@ -15,7 +16,7 @@ export const TranscriptGenerator = ({ file }: TranscriptGeneratorProps) => {
 
   const generateTranscript = async () => {
     setGenerating(true);
-    toast.info("Searching for transcript files in SCORM package...");
+    toast.info("Searching for transcript files and generating AI transcripts...");
     
     try {
       const JSZip = (await import("jszip")).default;
@@ -24,40 +25,61 @@ export const TranscriptGenerator = ({ file }: TranscriptGeneratorProps) => {
       
       // Look for subtitle/transcript files
       const transcriptExtensions = ['.vtt', '.srt', '.txt', '.sub'];
-      let foundTranscript = "";
+      let foundTranscripts: string[] = [];
       
       for (const [filename, zipEntry] of Object.entries(contents.files)) {
         if (!zipEntry.dir && transcriptExtensions.some(ext => filename.toLowerCase().endsWith(ext))) {
           const content = await zipEntry.async("string");
-          foundTranscript += `\n\n=== ${filename} ===\n\n${content}`;
+          foundTranscripts.push(`=== ${filename} ===\n\n${content}`);
         }
       }
       
-      if (foundTranscript) {
-        setTranscript(foundTranscript);
-        toast.success("Found transcript files!");
+      // Also try to generate AI transcript for videos
+      const videoExtensions = ['.mp4', '.webm', '.ogg', '.mov'];
+      for (const [filename, zipEntry] of Object.entries(contents.files)) {
+        if (!zipEntry.dir && videoExtensions.some(ext => filename.toLowerCase().endsWith(ext))) {
+          try {
+            toast.info(`Generating AI transcript for ${filename}...`);
+            
+            // Get small sample of video data
+            const blob = await zipEntry.async("blob");
+            const arrayBuffer = await blob.slice(0, Math.min(blob.size, 100000)).arrayBuffer();
+            const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+            
+            const { data, error } = await supabase.functions.invoke('transcribe-video', {
+              body: { videoBase64: base64, filename }
+            });
+            
+            if (error) throw error;
+            
+            if (data?.transcript) {
+              foundTranscripts.push(`=== AI Generated: ${filename} ===\n\n${data.transcript}`);
+            }
+          } catch (error) {
+            console.error(`Error transcribing ${filename}:`, error);
+          }
+        }
+      }
+      
+      if (foundTranscripts.length > 0) {
+        setTranscript(foundTranscripts.join('\n\n'));
+        toast.success(`Generated ${foundTranscripts.length} transcript(s)!`);
       } else {
-        // Generate placeholder that explains no transcripts found
-        const placeholderTranscript = `No transcript files (.vtt, .srt) found in SCORM package.
+        const placeholderTranscript = `No transcript files or videos found for transcription.
 
-To generate transcripts from videos:
+To add transcripts:
 1. Extract videos using the Videos tab
-2. Use external tools like:
-   - YouTube's auto-captioning (upload video first)
-   - OpenAI Whisper API
-   - Google Speech-to-Text
-   - AWS Transcribe
-
-The extracted transcript files can then be re-imported into your SCORM package.`;
+2. Use external transcription services
+3. Re-upload SCORM package with transcript files`;
         
         setTranscript(placeholderTranscript);
-        toast.info("No transcript files found in package");
+        toast.info("No content found for transcription");
       }
       
       setGenerating(false);
     } catch (error) {
-      console.error("Error extracting transcripts:", error);
-      toast.error("Failed to extract transcripts");
+      console.error("Error generating transcripts:", error);
+      toast.error("Failed to generate transcripts: " + (error instanceof Error ? error.message : "Unknown error"));
       setGenerating(false);
     }
   };
@@ -89,23 +111,23 @@ The extracted transcript files can then be re-imported into your SCORM package.`
             </div>
           </div>
           
-          <Button
-            onClick={generateTranscript}
-            disabled={generating}
-            className="gap-2 bg-gradient-to-r from-primary to-accent"
-          >
-            {generating ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Generating...
-              </>
-            ) : (
-              <>
-                <Wand2 className="w-4 h-4" />
-                Generate Transcript
-              </>
-            )}
-          </Button>
+            <Button
+              onClick={generateTranscript}
+              disabled={generating}
+              className="gap-2 bg-gradient-to-r from-primary to-accent"
+            >
+              {generating ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Generating AI Transcripts...
+                </>
+              ) : (
+                <>
+                  <Wand2 className="w-4 h-4" />
+                  Generate AI Transcripts
+                </>
+              )}
+            </Button>
         </div>
 
         {transcript && (

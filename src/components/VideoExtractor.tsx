@@ -184,14 +184,14 @@ export const VideoExtractor = ({ file }: VideoExtractorProps) => {
                 {(video.size / 1024 / 1024).toFixed(2)} MB
               </p>
               
-              <Button
-                className="w-full gap-2"
-                variant="outline"
-                onClick={() => downloadVideo(video)}
-              >
-                <Download className="w-4 h-4" />
-                Download
-              </Button>
+            <Button
+              className="w-full gap-2"
+              variant="outline"
+              onClick={() => downloadVideo(video)}
+            >
+              <Download className="w-4 h-4" />
+              Download Video {index + 1}
+            </Button>
             </div>
           </Card>
         ))}
