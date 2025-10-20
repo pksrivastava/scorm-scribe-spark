@@ -7,7 +7,7 @@ import { UploadSection } from "@/components/UploadSection";
 import { VideoExtractor } from "@/components/VideoExtractor";
 import { TranscriptGenerator } from "@/components/TranscriptGenerator";
 import { AssessmentExtractor } from "@/components/AssessmentExtractor";
-import { ScormPlayer } from "@/components/ScormPlayer";
+import { ScormPlayerNew } from "@/components/ScormPlayerNew";
 import { ExportOptions } from "@/components/ExportOptions";
 import { ProcessingStatus } from "@/components/ProcessingStatus";
 import { supabase } from "@/integrations/supabase/client";
@@ -133,7 +133,7 @@ const Index = () => {
               </TabsList>
 
               <TabsContent value="player" className="space-y-4">
-                <ScormPlayer file={scormFile} />
+                <ScormPlayerNew file={scormFile} />
               </TabsContent>
 
               <TabsContent value="videos" className="space-y-4">
