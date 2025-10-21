@@ -7,7 +7,8 @@ import { UploadSection } from "@/components/UploadSection";
 import { VideoExtractor } from "@/components/VideoExtractor";
 import { TranscriptGenerator } from "@/components/TranscriptGenerator";
 import { AssessmentExtractor } from "@/components/AssessmentExtractor";
-import { ScormPlayer } from "@/components/ScormPlayer";
+import { FunctionalScormPlayer } from "@/components/FunctionalScormPlayer";
+import { BulkScormUploader } from "@/components/BulkScormUploader";
 import { ExportOptions } from "@/components/ExportOptions";
 import { ProcessingStatus } from "@/components/ProcessingStatus";
 import { supabase } from "@/integrations/supabase/client";
@@ -70,7 +71,24 @@ const Index = () => {
         {/* Upload Section */}
         {!scormFile && (
           <div className="mb-8">
-            <UploadSection onFileUpload={handleFileUpload} />
+            <Tabs defaultValue="single" className="w-full">
+              <TabsList className="grid w-full grid-cols-2 mb-6">
+                <TabsTrigger value="single">Single Upload</TabsTrigger>
+                <TabsTrigger value="bulk">Bulk Upload</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="single">
+                <UploadSection onFileUpload={handleFileUpload} />
+              </TabsContent>
+              
+              <TabsContent value="bulk">
+                <BulkScormUploader 
+                  onComplete={(jobIds) => {
+                    toast.success(`Successfully processed ${jobIds.length} SCORM package(s)`);
+                  }}
+                />
+              </TabsContent>
+            </Tabs>
           </div>
         )}
 
@@ -133,7 +151,10 @@ const Index = () => {
               </TabsList>
 
               <TabsContent value="player" className="space-y-4">
-                <ScormPlayer file={scormFile} />
+                <FunctionalScormPlayer 
+                  file={scormFile}
+                  onDataCapture={(data) => console.log('SCORM Data:', data)}
+                />
               </TabsContent>
 
               <TabsContent value="videos" className="space-y-4">
