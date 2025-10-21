@@ -157,51 +157,49 @@ export const RobustScormPlayer = ({ file, onDataCapture }: RobustScormPlayerProp
         html = html.replace('<head>', `<head>${baseTag}`);
       }
 
-      // Inject script to find SCORM API in parent
+      // Inject script to find SCORM API in parent - run immediately
       const apiFinderScript = `
         <script>
-          console.log('SCORM content loaded, searching for API...');
-          
-          // Function to find SCORM API
-          function findAPI(win) {
-            let attempts = 0;
-            const maxAttempts = 20;
+          (function() {
+            console.log('[SCORM] Content loaded, connecting to API...');
             
-            while (win && attempts < maxAttempts) {
-              // Check for SCORM 2004
-              if (win.API_1484_11) {
-                console.log('Found SCORM 2004 API at level', attempts);
-                window.API_1484_11 = win.API_1484_11;
-                return win.API_1484_11;
+            // Make parent APIs directly accessible
+            try {
+              if (window.parent && window.parent !== window) {
+                // SCORM 2004
+                if (window.parent.API_1484_11) {
+                  window.API_1484_11 = window.parent.API_1484_11;
+                  console.log('[SCORM] Connected to SCORM 2004 API');
+                }
+                
+                // SCORM 1.2
+                if (window.parent.API) {
+                  window.API = window.parent.API;
+                  console.log('[SCORM] Connected to SCORM 1.2 API');
+                }
+                
+                // Also check grandparent
+                if (window.parent.parent && window.parent.parent !== window.parent) {
+                  if (window.parent.parent.API_1484_11) {
+                    window.API_1484_11 = window.parent.parent.API_1484_11;
+                    console.log('[SCORM] Connected to SCORM 2004 API (grandparent)');
+                  }
+                  if (window.parent.parent.API) {
+                    window.API = window.parent.parent.API;
+                    console.log('[SCORM] Connected to SCORM 1.2 API (grandparent)');
+                  }
+                }
+                
+                if (window.API || window.API_1484_11) {
+                  console.log('[SCORM] API connection successful!');
+                } else {
+                  console.error('[SCORM] API not found in parent windows');
+                }
               }
-              
-              // Check for SCORM 1.2
-              if (win.API) {
-                console.log('Found SCORM 1.2 API at level', attempts);
-                window.API = win.API;
-                return win.API;
-              }
-              
-              // Try parent
-              if (win.parent && win.parent !== win) {
-                win = win.parent;
-                attempts++;
-              } else {
-                break;
-              }
+            } catch (e) {
+              console.error('[SCORM] Error accessing parent API:', e);
             }
-            
-            console.error('SCORM API not found after', attempts, 'attempts');
-            return null;
-          }
-          
-          // Find and expose API
-          const api = findAPI(window);
-          if (api) {
-            console.log('SCORM API successfully connected');
-          } else {
-            console.error('Failed to connect to SCORM API');
-          }
+          })();
         </script>
       `;
 
@@ -343,7 +341,6 @@ export const RobustScormPlayer = ({ file, onDataCapture }: RobustScormPlayerProp
                 src={contentUrlRef.current}
                 className="w-full h-full"
                 title="SCORM Content"
-                sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"
                 allow="autoplay; fullscreen"
               />
             )}
