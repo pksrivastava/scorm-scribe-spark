@@ -7,7 +7,7 @@ import { UploadSection } from "@/components/UploadSection";
 import { VideoExtractor } from "@/components/VideoExtractor";
 import { TranscriptGenerator } from "@/components/TranscriptGenerator";
 import { AssessmentExtractor } from "@/components/AssessmentExtractor";
-import { FunctionalScormPlayer } from "@/components/FunctionalScormPlayer";
+import { RobustScormPlayer } from "@/components/RobustScormPlayer";
 import { BulkScormUploader } from "@/components/BulkScormUploader";
 import { ExportOptions } from "@/components/ExportOptions";
 import { ProcessingStatus } from "@/components/ProcessingStatus";
@@ -151,7 +151,7 @@ const Index = () => {
               </TabsList>
 
               <TabsContent value="player" className="space-y-4">
-                <FunctionalScormPlayer 
+                <RobustScormPlayer 
                   file={scormFile}
                   onDataCapture={(data) => console.log('SCORM Data:', data)}
                 />
