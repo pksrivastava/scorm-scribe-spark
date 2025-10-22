@@ -173,9 +173,12 @@ export const ScormAnalysisReport = ({ analysis }: ScormAnalysisReportProps) => {
               <AccordionTrigger>Video Files ({analysis.contentFiles.videos.length})</AccordionTrigger>
               <AccordionContent>
                 <div className="space-y-1 max-h-64 overflow-y-auto">
-                  {analysis.contentFiles.videos.map((video: string, idx: number) => (
-                    <div key={idx} className="p-2 bg-muted/50 rounded text-sm font-mono">
-                      {video}
+                  {analysis.contentFiles.videos.map((video, idx: number) => (
+                    <div key={idx} className="p-2 bg-muted/50 rounded">
+                      <div className="text-sm font-mono text-foreground">{video.path}</div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {(video.size / 1024 / 1024).toFixed(2)} MB • {video.type}
+                      </div>
                     </div>
                   ))}
                 </div>

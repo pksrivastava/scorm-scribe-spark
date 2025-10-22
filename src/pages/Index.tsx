@@ -62,6 +62,9 @@ const Index = () => {
               <Download className="w-4 h-4" />
               Export All
             </Button>
+            <Button variant="outline" onClick={() => window.location.href = '/developer'}>
+              Developer API
+            </Button>
           </div>
         </div>
       </header>
