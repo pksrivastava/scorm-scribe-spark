@@ -152,23 +152,26 @@ export const BulkScormUploader = ({ onComplete }: BulkScormUploaderProps) => {
 
         {/* File Input */}
         <div className="flex gap-2">
-          <label className="flex-1">
-            <input
-              type="file"
-              multiple
-              accept=".zip"
-              onChange={handleFileSelect}
-              className="hidden"
-              disabled={isProcessing}
-            />
+          <input
+            type="file"
+            multiple
+            accept=".zip"
+            onChange={handleFileSelect}
+            className="hidden"
+            disabled={isProcessing}
+            id="bulk-scorm-upload"
+          />
+          <label htmlFor="bulk-scorm-upload" className="flex-1">
             <Button 
               variant="outline" 
               className="w-full gap-2" 
               disabled={isProcessing}
-              onClick={() => (document.querySelector('input[type="file"]') as HTMLInputElement)?.click()}
+              asChild
             >
-              <Upload className="w-4 h-4" />
-              Select SCORM Files (.zip)
+              <span>
+                <Upload className="w-4 h-4" />
+                Select SCORM Files (.zip)
+              </span>
             </Button>
           </label>
           

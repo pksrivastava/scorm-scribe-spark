@@ -9,6 +9,14 @@ export interface MultimediaFile {
   blob?: Blob;
 }
 
+export interface ContentFile {
+  path: string;
+  size: number;
+  type: string;
+  content?: string;
+  blob?: Blob;
+}
+
 export interface Assessment {
   file: string;
   type: 'qti' | 'html' | 'javascript' | 'scorm' | 'unknown';
@@ -36,12 +44,15 @@ export interface ScormAnalysis {
   resources: any[];
   metadata: any;
   contentFiles: {
-    html: string[];
+    html: ContentFile[];
     videos: MultimediaFile[];
     audio: MultimediaFile[];
     images: string[];
-    javascript: string[];
+    javascript: ContentFile[];
     css: string[];
+    pdfs: ContentFile[];
+    epubs: ContentFile[];
+    textContent: ContentFile[];
     other: string[];
   };
   assessments: Assessment[];
@@ -181,18 +192,24 @@ const extractResources = (xmlDoc: Document): any[] => {
 
 const categorizeFiles = async (zip: JSZip): Promise<any> => {
   const categories = {
-    html: [] as string[],
+    html: [] as ContentFile[],
     videos: [] as MultimediaFile[],
     audio: [] as MultimediaFile[],
     images: [] as string[],
-    javascript: [] as string[],
+    javascript: [] as ContentFile[],
     css: [] as string[],
+    pdfs: [] as ContentFile[],
+    epubs: [] as ContentFile[],
+    textContent: [] as ContentFile[],
     other: [] as string[]
   };
 
   const videoExts = ['.mp4', '.webm', '.ogg', '.mov', '.avi', '.wmv', '.flv', '.m4v'];
   const audioExts = ['.mp3', '.wav', '.ogg', '.m4a', '.aac', '.wma', '.flac'];
   const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp', '.bmp', '.ico'];
+  const pdfExts = ['.pdf'];
+  const epubExts = ['.epub'];
+  const textExts = ['.txt', '.md', '.doc', '.docx'];
   
   const filePromises: Promise<void>[] = [];
   
@@ -203,7 +220,16 @@ const categorizeFiles = async (zip: JSZip): Promise<any> => {
     const lower = filename.toLowerCase();
     
     if (lower.endsWith('.html') || lower.endsWith('.htm')) {
-      categories.html.push(filename);
+      filePromises.push(
+        file.async('string').then(content => {
+          categories.html.push({
+            path: filename,
+            size: content.length,
+            type: 'text/html',
+            content: content.substring(0, 50000) // First 50KB for text analysis
+          });
+        })
+      );
     } else if (videoExts.some(ext => lower.endsWith(ext))) {
       // Extract video file with metadata
       filePromises.push(
@@ -231,9 +257,61 @@ const categorizeFiles = async (zip: JSZip): Promise<any> => {
     } else if (imageExts.some(ext => lower.endsWith(ext))) {
       categories.images.push(filename);
     } else if (lower.endsWith('.js')) {
-      categories.javascript.push(filename);
+      filePromises.push(
+        file.async('string').then(content => {
+          categories.javascript.push({
+            path: filename,
+            size: content.length,
+            type: 'application/javascript',
+            content: content.substring(0, 50000) // First 50KB for text analysis
+          });
+        })
+      );
     } else if (lower.endsWith('.css')) {
       categories.css.push(filename);
+    } else if (pdfExts.some(ext => lower.endsWith(ext))) {
+      filePromises.push(
+        file.async('blob').then(blob => {
+          categories.pdfs.push({
+            path: filename,
+            size: blob.size,
+            type: 'application/pdf',
+            blob
+          });
+        })
+      );
+    } else if (epubExts.some(ext => lower.endsWith(ext))) {
+      filePromises.push(
+        file.async('blob').then(blob => {
+          categories.epubs.push({
+            path: filename,
+            size: blob.size,
+            type: 'application/epub+zip',
+            blob
+          });
+        })
+      );
+    } else if (textExts.some(ext => lower.endsWith(ext))) {
+      filePromises.push(
+        file.async('string').then(content => {
+          categories.textContent.push({
+            path: filename,
+            size: content.length,
+            type: 'text/plain',
+            content
+          });
+        }).catch(() => {
+          // If text reading fails, try as blob
+          return file.async('blob').then(blob => {
+            categories.textContent.push({
+              path: filename,
+              size: blob.size,
+              type: 'text/plain',
+              blob
+            });
+          });
+        })
+      );
     } else if (!lower.includes('imsmanifest.xml')) {
       categories.other.push(filename);
     }

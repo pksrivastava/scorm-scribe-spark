@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, Download, CheckCircle } from "lucide-react";
+import { FileText, Download, CheckCircle, Wand2, Loader2 } from "lucide-react";
 import JSZip from "jszip";
 import { toast } from "sonner";
+import { analyzeScormPackage } from "@/utils/scormAnalyzer";
 
 interface AssessmentExtractorProps {
   file: File;
+  transcript?: string;
 }
 
 interface Assessment {
@@ -16,87 +18,24 @@ interface Assessment {
   questions: number;
 }
 
-export const AssessmentExtractor = ({ file }: AssessmentExtractorProps) => {
+export const AssessmentExtractor = ({ file, transcript }: AssessmentExtractorProps) => {
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [generatingFromTranscript, setGeneratingFromTranscript] = useState(false);
 
   useEffect(() => {
     const extractAssessments = async () => {
       try {
-        const zip = new JSZip();
-        const contents = await zip.loadAsync(file);
+        // Use the enhanced analyzer
+        const analysis = await analyzeScormPackage(file);
         
-        // Look for imsmanifest.xml to find assessments
-        const manifestFile = contents.file("imsmanifest.xml");
-        if (manifestFile) {
-          const manifestContent = await manifestFile.async("string");
-          const parser = new DOMParser();
-          const xmlDoc = parser.parseFromString(manifestContent, "text/xml");
-          
-          // Get items and resources
-          const items = xmlDoc.querySelectorAll("organizations > organization > item");
-          const resources = xmlDoc.getElementsByTagName("resource");
-          
-          const foundAssessments: Assessment[] = [];
+        const foundAssessments: Assessment[] = analysis.assessments.map((assessment, idx) => ({
+          id: `assessment-${idx}`,
+          title: assessment.file,
+          type: assessment.type.toUpperCase(),
+          questions: assessment.questionCount
+        }));
         
-        // Look through resources for assessment-related content
-        for (let i = 0; i < resources.length; i++) {
-          const resource = resources[i];
-          const type = resource.getAttribute("type") || "";
-          const href = resource.getAttribute("href") || "";
-          const identifier = resource.getAttribute("identifier") || "";
-          
-          // Check if this is assessment-related
-          const isAssessment = 
-            type.toLowerCase().includes("assessment") ||
-            type.toLowerCase().includes("quiz") ||
-            type.toLowerCase().includes("test") ||
-            type.toLowerCase().includes("questionnaire") ||
-            href.toLowerCase().includes("quiz") ||
-            href.toLowerCase().includes("test") ||
-            href.toLowerCase().includes("assessment");
-          
-          if (isAssessment) {
-            // Try to find associated item for title
-            let title = resource.getAttribute("title") || "";
-            
-            if (!title) {
-              // Look for item referencing this resource
-              for (let j = 0; j < items.length; j++) {
-                if (items[j].getAttribute("identifierref") === identifier) {
-                  const titleEl = items[j].querySelector("title");
-                  if (titleEl) title = titleEl.textContent || "";
-                  break;
-                }
-              }
-            }
-            
-            if (!title) title = `Assessment ${foundAssessments.length + 1}`;
-            
-            // Try to estimate questions by looking at the file
-            let questionCount = 0;
-            const assessmentFile = contents.file(href);
-            if (assessmentFile) {
-              try {
-                const fileContent = await assessmentFile.async("string");
-                // Count common question indicators
-                const questionMatches = fileContent.match(/<question|<item|"question"|class="question"/gi);
-                questionCount = questionMatches ? questionMatches.length : 0;
-              } catch (error) {
-                console.warn("Could not parse assessment file:", error);
-              }
-            }
-            
-            foundAssessments.push({
-              id: identifier || `assessment-${i}`,
-              title: title,
-              type: type.includes("quiz") || href.includes("quiz") ? "Quiz" : "Assessment",
-              questions: questionCount || Math.floor(Math.random() * 10) + 5
-            });
-          }
-        }
-        
-        // If no assessments found, inform user
         if (foundAssessments.length === 0) {
           toast.info("No assessments detected in SCORM package");
         } else {
@@ -104,7 +43,6 @@ export const AssessmentExtractor = ({ file }: AssessmentExtractorProps) => {
         }
         
         setAssessments(foundAssessments);
-        }
         
         setLoading(false);
       } catch (error) {
@@ -116,6 +54,62 @@ export const AssessmentExtractor = ({ file }: AssessmentExtractorProps) => {
 
     extractAssessments();
   }, [file]);
+
+  const generateFromTranscript = async () => {
+    if (!transcript || transcript.length < 100) {
+      toast.error("Please generate a transcript first");
+      return;
+    }
+
+    setGeneratingFromTranscript(true);
+    toast.info("Analyzing transcript to extract assessment questions...");
+
+    try {
+      // Parse transcript for question patterns
+      const lines = transcript.split('\n');
+      const detectedQuestions: Assessment[] = [];
+      let currentSection = "Transcript Assessment";
+      let questionCount = 0;
+
+      for (const line of lines) {
+        // Detect section headers
+        if (line.startsWith('===') || line.startsWith('##')) {
+          const match = line.match(/[=#]+\s*(.+?)\s*[=#]*/);
+          if (match) currentSection = match[1].trim();
+          continue;
+        }
+
+        // Detect question patterns
+        const isQuestion = /(\?|quiz|test|question|assessment|\d+\.|^Q\d+|^[A-D][\)\.])/.test(line) && 
+                          line.length > 20 && 
+                          line.length < 500;
+        
+        if (isQuestion) {
+          questionCount++;
+        }
+      }
+
+      if (questionCount > 0) {
+        detectedQuestions.push({
+          id: 'transcript-assessment',
+          title: 'Transcript Generated Assessment',
+          type: 'Transcript Analysis',
+          questions: questionCount
+        });
+
+        setAssessments(prev => [...prev, ...detectedQuestions]);
+        toast.success(`Found ${questionCount} potential question(s) in transcript`);
+      } else {
+        toast.info("No clear assessment patterns found in transcript");
+      }
+
+      setGeneratingFromTranscript(false);
+    } catch (error) {
+      console.error("Error generating from transcript:", error);
+      toast.error("Failed to analyze transcript");
+      setGeneratingFromTranscript(false);
+    }
+  };
 
   const exportAssessment = (assessment: Assessment) => {
     const data = {
@@ -145,6 +139,37 @@ export const AssessmentExtractor = ({ file }: AssessmentExtractorProps) => {
 
   return (
     <div className="space-y-4">
+      {transcript && (
+        <Card className="p-4 bg-primary/5 border-primary/20">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <p className="text-sm font-medium">Generate assessments from transcript</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Analyze the generated transcript to extract potential assessment questions
+              </p>
+            </div>
+            <Button
+              onClick={generateFromTranscript}
+              disabled={generatingFromTranscript}
+              variant="outline"
+              className="gap-2"
+            >
+              {generatingFromTranscript ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Analyzing...
+                </>
+              ) : (
+                <>
+                  <Wand2 className="w-4 h-4" />
+                  Generate from Transcript
+                </>
+              )}
+            </Button>
+          </div>
+        </Card>
+      )}
+
       {assessments.map((assessment) => (
         <Card key={assessment.id} className="p-6 hover:shadow-lg hover:shadow-primary/20 transition-all">
           <div className="flex items-start justify-between">

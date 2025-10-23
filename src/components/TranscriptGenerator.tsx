@@ -1,78 +1,101 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MessageSquare, Download, Wand2, Loader2 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { analyzeScormPackage, type ContentFile } from "@/utils/scormAnalyzer";
 
 interface TranscriptGeneratorProps {
   file: File;
+  transcript?: string;
+  onTranscriptChange?: (transcript: string) => void;
 }
 
-export const TranscriptGenerator = ({ file }: TranscriptGeneratorProps) => {
+export const TranscriptGenerator = ({ file, transcript: externalTranscript, onTranscriptChange }: TranscriptGeneratorProps) => {
   const [generating, setGenerating] = useState(false);
-  const [transcript, setTranscript] = useState("");
+  const [transcript, setTranscript] = useState(externalTranscript || "");
+
+  useEffect(() => {
+    if (externalTranscript) {
+      setTranscript(externalTranscript);
+    }
+  }, [externalTranscript]);
+
+  const updateTranscript = (newTranscript: string) => {
+    setTranscript(newTranscript);
+    onTranscriptChange?.(newTranscript);
+  };
 
   const generateTranscript = async () => {
     setGenerating(true);
-    toast.info("Searching for transcript files and generating AI transcripts...");
+    toast.info("Analyzing SCORM package and extracting content in manifest order...");
     
     try {
-      const JSZip = (await import("jszip")).default;
-      const zip = new JSZip();
-      const contents = await zip.loadAsync(file);
-      
-      // Look for subtitle/transcript files
-      const transcriptExtensions = ['.vtt', '.srt', '.txt', '.sub'];
-      let foundTranscripts: string[] = [];
-      
-      for (const [filename, zipEntry] of Object.entries(contents.files)) {
-        if (!zipEntry.dir && transcriptExtensions.some(ext => filename.toLowerCase().endsWith(ext))) {
-          const content = await zipEntry.async("string");
-          foundTranscripts.push(`=== ${filename} ===\n\n${content}`);
-        }
+      // Analyze SCORM package to get organized structure
+      const analysis = await analyzeScormPackage(file);
+      const transcriptParts: string[] = [];
+
+      // Process content in manifest order
+      for (const item of analysis.structure) {
+        await processStructureItem(item, analysis, transcriptParts);
       }
-      
-      // Also try to generate AI transcript for videos
-      const videoExtensions = ['.mp4', '.webm', '.ogg', '.mov'];
-      for (const [filename, zipEntry] of Object.entries(contents.files)) {
-        if (!zipEntry.dir && videoExtensions.some(ext => filename.toLowerCase().endsWith(ext))) {
-          try {
-            toast.info(`Generating AI transcript for ${filename}...`);
-            
-            // Get small sample of video data
-            const blob = await zipEntry.async("blob");
-            const arrayBuffer = await blob.slice(0, Math.min(blob.size, 100000)).arrayBuffer();
-            const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-            
-            const { data, error } = await supabase.functions.invoke('transcribe-video', {
-              body: { videoBase64: base64, filename }
-            });
-            
-            if (error) throw error;
-            
-            if (data?.transcript) {
-              foundTranscripts.push(`=== AI Generated: ${filename} ===\n\n${data.transcript}`);
-            }
-          } catch (error) {
-            console.error(`Error transcribing ${filename}:`, error);
+
+      // Extract HTML text content
+      for (const htmlFile of analysis.contentFiles.html) {
+        if (htmlFile.content) {
+          const textContent = extractTextFromHTML(htmlFile.content);
+          if (textContent.length > 100) {
+            transcriptParts.push(`=== ${htmlFile.path} ===\n\n${textContent}\n`);
           }
         }
       }
-      
-      if (foundTranscripts.length > 0) {
-        setTranscript(foundTranscripts.join('\n\n'));
-        toast.success(`Generated ${foundTranscripts.length} transcript(s)!`);
-      } else {
-        const placeholderTranscript = `No transcript files or videos found for transcription.
 
-To add transcripts:
-1. Extract videos using the Videos tab
-2. Use external transcription services
-3. Re-upload SCORM package with transcript files`;
-        
-        setTranscript(placeholderTranscript);
+      // Extract JavaScript text content
+      for (const jsFile of analysis.contentFiles.javascript) {
+        if (jsFile.content) {
+          const textContent = extractTextFromJS(jsFile.content);
+          if (textContent.length > 100) {
+            transcriptParts.push(`=== ${jsFile.path} (Extracted Text) ===\n\n${textContent}\n`);
+          }
+        }
+      }
+
+      // Extract PDF content
+      for (const pdfFile of analysis.contentFiles.pdfs) {
+        transcriptParts.push(`=== ${pdfFile.path} (PDF Document) ===\n\n[PDF content - ${(pdfFile.size / 1024).toFixed(2)} KB]\n`);
+      }
+
+      // Extract EPUB content
+      for (const epubFile of analysis.contentFiles.epubs) {
+        transcriptParts.push(`=== ${epubFile.path} (EPUB Document) ===\n\n[EPUB content - ${(epubFile.size / 1024).toFixed(2)} KB]\n`);
+      }
+
+      // Extract text files
+      for (const textFile of analysis.contentFiles.textContent) {
+        if (textFile.content) {
+          transcriptParts.push(`=== ${textFile.path} ===\n\n${textFile.content}\n`);
+        }
+      }
+
+      // Process videos
+      for (const video of analysis.contentFiles.videos) {
+        transcriptParts.push(`=== ${video.path} (Video) ===\n\n[Video content - ${(video.size / 1024 / 1024).toFixed(2)} MB]\n`);
+      }
+
+      // Process audio
+      for (const audio of analysis.contentFiles.audio) {
+        transcriptParts.push(`=== ${audio.path} (Audio) ===\n\n[Audio content - ${(audio.size / 1024 / 1024).toFixed(2)} MB]\n`);
+      }
+      
+      if (transcriptParts.length > 0) {
+        const finalTranscript = transcriptParts.join('\n---\n\n');
+        updateTranscript(finalTranscript);
+        toast.success(`Generated transcript from ${transcriptParts.length} content item(s)!`);
+      } else {
+        const placeholderTranscript = `No content found for transcription.\n\nThe SCORM package appears to be empty or contains no extractable content.`;
+        updateTranscript(placeholderTranscript);
         toast.info("No content found for transcription");
       }
       
@@ -82,6 +105,45 @@ To add transcripts:
       toast.error("Failed to generate transcripts: " + (error instanceof Error ? error.message : "Unknown error"));
       setGenerating(false);
     }
+  };
+
+  const processStructureItem = async (item: any, analysis: any, transcriptParts: string[]) => {
+    if (item.title) {
+      transcriptParts.push(`\n## ${item.title}\n`);
+    }
+    
+    // Process children recursively
+    if (item.children) {
+      for (const child of item.children) {
+        await processStructureItem(child, analysis, transcriptParts);
+      }
+    }
+  };
+
+  const extractTextFromHTML = (html: string): string => {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    
+    // Remove script and style tags
+    doc.querySelectorAll('script, style, noscript').forEach(el => el.remove());
+    
+    // Get text content
+    const text = doc.body?.textContent || '';
+    return text.replace(/\s+/g, ' ').trim();
+  };
+
+  const extractTextFromJS = (js: string): string => {
+    // Extract strings from JavaScript
+    const stringRegex = /["'`]([^"'`]{20,}?)["'`]/g;
+    const matches = [...js.matchAll(stringRegex)];
+    const texts = matches.map(m => m[1]).filter(t => {
+      // Filter out code-like strings
+      return !t.includes('function') && 
+             !t.includes('return') && 
+             !t.includes('=>') &&
+             !t.match(/^[a-z]+$/i); // Skip single words
+    });
+    return texts.join('\n\n');
   };
 
   const downloadTranscript = () => {
@@ -134,7 +196,7 @@ To add transcripts:
           <div className="space-y-4">
             <Textarea
               value={transcript}
-              onChange={(e) => setTranscript(e.target.value)}
+              onChange={(e) => updateTranscript(e.target.value)}
               className="min-h-[300px] font-mono text-sm bg-muted/50"
               placeholder="Generated transcript will appear here..."
             />

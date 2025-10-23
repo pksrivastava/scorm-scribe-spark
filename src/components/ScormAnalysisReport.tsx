@@ -191,9 +191,12 @@ export const ScormAnalysisReport = ({ analysis }: ScormAnalysisReportProps) => {
               <AccordionTrigger>HTML Files ({analysis.contentFiles.html.length})</AccordionTrigger>
               <AccordionContent>
                 <div className="space-y-1 max-h-64 overflow-y-auto">
-                  {analysis.contentFiles.html.map((html: string, idx: number) => (
-                    <div key={idx} className="p-2 bg-muted/50 rounded text-sm font-mono">
-                      {html}
+                  {analysis.contentFiles.html.map((htmlFile, idx: number) => (
+                    <div key={idx} className="p-2 bg-muted/50 rounded">
+                      <div className="text-sm font-mono text-foreground">{htmlFile.path}</div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        {(htmlFile.size / 1024).toFixed(2)} KB
+                      </div>
                     </div>
                   ))}
                 </div>

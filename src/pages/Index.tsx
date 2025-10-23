@@ -17,6 +17,7 @@ import { toast } from "sonner";
 const Index = () => {
   const [scormFile, setScormFile] = useState<File | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
+  const [transcript, setTranscript] = useState<string>("");
 
   const handleFileUpload = async (file: File) => {
     setScormFile(file);
@@ -165,11 +166,18 @@ const Index = () => {
               </TabsContent>
 
               <TabsContent value="transcripts" className="space-y-4">
-                <TranscriptGenerator file={scormFile} />
+                <TranscriptGenerator 
+                  file={scormFile} 
+                  transcript={transcript}
+                  onTranscriptChange={setTranscript}
+                />
               </TabsContent>
 
               <TabsContent value="assessments" className="space-y-4">
-                <AssessmentExtractor file={scormFile} />
+                <AssessmentExtractor 
+                  file={scormFile}
+                  transcript={transcript}
+                />
               </TabsContent>
 
               <TabsContent value="export" className="space-y-4">
