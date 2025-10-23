@@ -120,16 +120,83 @@ export const TranscriptGenerator = ({ file, transcript: externalTranscript, onTr
     }
   };
 
+  const cleanAcademicContent = (text: string): string => {
+    // Remove common SCORM navigation patterns
+    const navigationPatterns = [
+      /\b(click|press|tap)\s+(next|previous|back|forward|continue|submit|menu|home|exit)\b/gi,
+      /\b(next|previous|back|forward)\s+(page|slide|screen|button)\b/gi,
+      /\bnavigation\s+(menu|bar|controls?)\b/gi,
+      /\b(start|begin|resume|restart)\s+(course|lesson|module|activity)\b/gi,
+      /\bgo\s+to\s+(next|previous|main|home)\b/gi,
+      /\b(select|choose)\s+(an?\s+)?(option|answer|choice)\b/gi,
+      /\bmenu\s+button\b/gi,
+      /\bscorm\s+(player|navigation|controls?)\b/gi,
+      /\b(close|minimize|maximize)\s+window\b/gi,
+      /\btable\s+of\s+contents\b/gi,
+      /\bglossary\b/gi,
+      /\bresources?\s+(panel|section)\b/gi,
+      /\bhelp\s+(menu|section|button)\b/gi,
+    ];
+
+    // Remove button and UI element text patterns
+    const uiPatterns = [
+      /\[?(button|btn|link|icon|image|video|audio|media)\]?:?\s*/gi,
+      /\b(loading|buffering|processing)\.{3}/gi,
+      /^\s*(home|menu|next|previous|back|forward|submit|close|exit|help|glossary|resources?|toc)\s*$/gmi,
+      /^[<>→←↑↓⇨⇦⇧⇩▶◀▲▼]+$/gm,
+      /^\s*[\d]+\s*\/\s*[\d]+\s*$/gm, // Page numbers like "1 / 10"
+    ];
+
+    // Remove accessibility and metadata patterns
+    const metaPatterns = [
+      /\baria-label\b/gi,
+      /\balt\s+text\b/gi,
+      /\btitle\s+attribute\b/gi,
+      /\b(screen|keyboard)\s+reader\b/gi,
+      /\bcopyright\s+©/gi,
+      /\ball\s+rights\s+reserved\b/gi,
+    ];
+
+    let cleaned = text;
+
+    // Apply all cleaning patterns
+    [...navigationPatterns, ...uiPatterns, ...metaPatterns].forEach(pattern => {
+      cleaned = cleaned.replace(pattern, ' ');
+    });
+
+    // Remove multiple spaces and clean up
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+
+    // Remove very short fragments (likely UI elements)
+    const lines = cleaned.split(/[.!?]\s+/);
+    const meaningfulLines = lines.filter(line => {
+      const words = line.trim().split(/\s+/);
+      return words.length >= 5; // Keep only sentences with 5+ words
+    });
+
+    return meaningfulLines.join('. ').trim();
+  };
+
   const extractTextFromHTML = (html: string): string => {
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
     
-    // Remove script and style tags
-    doc.querySelectorAll('script, style, noscript').forEach(el => el.remove());
+    // Remove script, style, and navigation elements
+    doc.querySelectorAll('script, style, noscript, nav, .navigation, .nav-buttons, .controls, #navigation, #controls').forEach(el => el.remove());
+    
+    // Remove common SCORM UI elements by class/id patterns
+    doc.querySelectorAll('[class*="nav"], [class*="menu"], [class*="button"], [id*="nav"], [id*="menu"], [id*="button"]').forEach(el => {
+      if (el.textContent && el.textContent.length < 50) { // Only remove short UI elements
+        el.remove();
+      }
+    });
     
     // Get text content
     const text = doc.body?.textContent || '';
-    return text.replace(/\s+/g, ' ').trim();
+    const rawText = text.replace(/\s+/g, ' ').trim();
+    
+    // Clean academic content
+    return cleanAcademicContent(rawText);
   };
 
   const extractTextFromJS = (js: string): string => {
@@ -137,13 +204,20 @@ export const TranscriptGenerator = ({ file, transcript: externalTranscript, onTr
     const stringRegex = /["'`]([^"'`]{20,}?)["'`]/g;
     const matches = [...js.matchAll(stringRegex)];
     const texts = matches.map(m => m[1]).filter(t => {
-      // Filter out code-like strings
+      // Filter out code-like strings and navigation text
+      const lower = t.toLowerCase();
       return !t.includes('function') && 
              !t.includes('return') && 
              !t.includes('=>') &&
-             !t.match(/^[a-z]+$/i); // Skip single words
+             !t.match(/^[a-z]+$/i) && // Skip single words
+             !lower.includes('click') &&
+             !lower.includes('button') &&
+             !lower.includes('navigate') &&
+             !lower.includes('menu');
     });
-    return texts.join('\n\n');
+    
+    const rawText = texts.join('\n\n');
+    return cleanAcademicContent(rawText);
   };
 
   const downloadTranscript = () => {
