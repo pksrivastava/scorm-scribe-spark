@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Upload, Video, FileText, MessageSquare, Play, Download } from "lucide-react";
+import { Upload, Video, FileText, MessageSquare, Play, Download, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UploadSection } from "@/components/UploadSection";
 import { VideoExtractor } from "@/components/VideoExtractor";
@@ -13,32 +14,66 @@ import { ExportOptions } from "@/components/ExportOptions";
 import { ProcessingStatus } from "@/components/ProcessingStatus";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { validateAndRepairScormPackage, type RepairResult } from "@/utils/scormPackageRepair";
+import { useNavigate } from "react-router-dom";
 
 const Index = () => {
   const [scormFile, setScormFile] = useState<File | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<string>("");
+  const [repairResult, setRepairResult] = useState<RepairResult | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
+  const navigate = useNavigate();
 
   const handleFileUpload = async (file: File) => {
-    setScormFile(file);
+    setIsValidating(true);
+    toast.info("Validating SCORM package...");
     
-    // Create processing job in database
-    const { data, error } = await supabase
-      .from('scorm_jobs')
-      .insert({
-        filename: file.name,
-        status: 'processing',
-        metadata: { size: file.size, type: file.type }
-      })
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error creating job:', error);
-      toast.error('Failed to create processing job');
-    } else if (data) {
-      setJobId(data.id);
-      toast.success('Processing job created!');
+    try {
+      const result = await validateAndRepairScormPackage(file);
+      setRepairResult(result);
+      
+      if (result.repairedFile) {
+        setScormFile(result.repairedFile);
+        toast.success(`Package repaired with ${result.fixes.length} fix(es)`);
+      } else if (result.success) {
+        setScormFile(file);
+        toast.success("SCORM package validated successfully");
+      } else {
+        setScormFile(file);
+        toast.warning("Package loaded with issues - player may not work correctly");
+      }
+
+      // Create processing job in database
+      const finalFile = result.repairedFile || file;
+      const { data, error } = await supabase
+        .from('scorm_jobs')
+        .insert({
+          filename: finalFile.name,
+          status: 'processing',
+          metadata: { 
+            size: finalFile.size, 
+            type: finalFile.type,
+            repaired: !!result.repairedFile,
+            issues: result.issues,
+            fixes: result.fixes
+          }
+        })
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Error creating job:', error);
+        toast.error('Failed to create processing job');
+      } else if (data) {
+        setJobId(data.id);
+      }
+    } catch (error) {
+      console.error("Validation error:", error);
+      setScormFile(file);
+      toast.error("Validation failed, loading package anyway");
+    } finally {
+      setIsValidating(false);
     }
   };
 
@@ -94,6 +129,55 @@ const Index = () => {
               </TabsContent>
             </Tabs>
           </div>
+        )}
+
+        {/* Validation Status */}
+        {isValidating && (
+          <Alert className="mb-6">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              Validating and repairing SCORM package...
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Repair Results */}
+        {repairResult && (repairResult.issues.length > 0 || repairResult.warnings.length > 0) && (
+          <Alert variant={repairResult.issues.length > 0 ? "destructive" : "default"} className="mb-6">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              {repairResult.fixes.length > 0 && (
+                <div className="mb-2">
+                  <strong>Fixes Applied:</strong>
+                  <ul className="list-disc list-inside mt-1">
+                    {repairResult.fixes.map((fix, idx) => (
+                      <li key={idx} className="text-sm">{fix}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {repairResult.warnings.length > 0 && (
+                <div className="mb-2">
+                  <strong>Warnings:</strong>
+                  <ul className="list-disc list-inside mt-1">
+                    {repairResult.warnings.map((warning, idx) => (
+                      <li key={idx} className="text-sm">{warning}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {repairResult.issues.length > 0 && (
+                <div>
+                  <strong>Issues:</strong>
+                  <ul className="list-disc list-inside mt-1">
+                    {repairResult.issues.map((issue, idx) => (
+                      <li key={idx} className="text-sm">{issue}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </AlertDescription>
+          </Alert>
         )}
 
         {/* Processing Status */}

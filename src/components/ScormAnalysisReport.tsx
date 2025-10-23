@@ -1,14 +1,77 @@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { FileText, Video, Image, Code, Music, AlertCircle, CheckCircle } from "lucide-react";
+import { FileText, Video, Image, Code, Music, AlertCircle, CheckCircle, Download } from "lucide-react";
 import type { ScormAnalysis } from "@/utils/scormAnalyzer";
+import { toast } from "sonner";
+import JSZip from "jszip";
 
 interface ScormAnalysisReportProps {
   analysis: ScormAnalysis;
 }
 
 export const ScormAnalysisReport = ({ analysis }: ScormAnalysisReportProps) => {
+  const downloadFile = async (file: { path: string; content?: string; blob?: Blob }, type: string) => {
+    try {
+      let blob: Blob;
+      let filename = file.path.split('/').pop() || 'download';
+
+      if (file.blob) {
+        blob = file.blob;
+      } else if (file.content) {
+        blob = new Blob([file.content], { type: 'text/plain' });
+      } else {
+        toast.error('File content not available');
+        return;
+      }
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      toast.success(`Downloaded ${filename}`);
+    } catch (error) {
+      console.error('Download error:', error);
+      toast.error('Failed to download file');
+    }
+  };
+
+  const downloadAllOfType = async (files: any[], type: string) => {
+    try {
+      const zip = new JSZip();
+      const folder = zip.folder(type);
+
+      for (const file of files) {
+        const filename = file.path.split('/').pop() || `${type}_${Date.now()}`;
+        if (file.blob) {
+          folder?.file(filename, file.blob);
+        } else if (file.content) {
+          folder?.file(filename, file.content);
+        }
+      }
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${type}_${Date.now()}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      toast.success(`Downloaded all ${type} files`);
+    } catch (error) {
+      console.error('Download all error:', error);
+      toast.error(`Failed to download ${type} files`);
+    }
+  };
   return (
     <div className="space-y-4">
       <Card className="p-6 bg-gradient-to-br from-card to-card/50">
@@ -170,15 +233,41 @@ export const ScormAnalysisReport = ({ analysis }: ScormAnalysisReportProps) => {
 
           {analysis.contentFiles.videos.length > 0 && (
             <AccordionItem value="videos">
-              <AccordionTrigger>Video Files ({analysis.contentFiles.videos.length})</AccordionTrigger>
+              <AccordionTrigger>
+                <div className="flex items-center justify-between w-full pr-4">
+                  <span>Video Files ({analysis.contentFiles.videos.length})</span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      downloadAllOfType(analysis.contentFiles.videos, 'videos');
+                    }}
+                    className="gap-2"
+                  >
+                    <Download className="w-3 h-3" />
+                    Download All
+                  </Button>
+                </div>
+              </AccordionTrigger>
               <AccordionContent>
                 <div className="space-y-1 max-h-64 overflow-y-auto">
                   {analysis.contentFiles.videos.map((video, idx: number) => (
-                    <div key={idx} className="p-2 bg-muted/50 rounded">
-                      <div className="text-sm font-mono text-foreground">{video.path}</div>
-                      <div className="text-xs text-muted-foreground mt-1">
-                        {(video.size / 1024 / 1024).toFixed(2)} MB • {video.type}
+                    <div key={idx} className="p-2 bg-muted/50 rounded flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="text-sm font-mono text-foreground">{video.path}</div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {(video.size / 1024 / 1024).toFixed(2)} MB • {video.type}
+                        </div>
                       </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => downloadFile(video, 'video')}
+                        className="gap-2"
+                      >
+                        <Download className="w-3 h-3" />
+                      </Button>
                     </div>
                   ))}
                 </div>
