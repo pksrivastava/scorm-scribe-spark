@@ -121,40 +121,49 @@ export const TranscriptGenerator = ({ file, transcript: externalTranscript, onTr
   };
 
   const cleanAcademicContent = (text: string): string => {
-    // Remove common SCORM navigation patterns
+    // Remove common SCORM navigation patterns - more comprehensive
     const navigationPatterns = [
-      /\b(click|press|tap)\s+(next|previous|back|forward|continue|submit|menu|home|exit)\b/gi,
-      /\b(next|previous|back|forward)\s+(page|slide|screen|button)\b/gi,
-      /\bnavigation\s+(menu|bar|controls?)\b/gi,
-      /\b(start|begin|resume|restart)\s+(course|lesson|module|activity)\b/gi,
-      /\bgo\s+to\s+(next|previous|main|home)\b/gi,
-      /\b(select|choose)\s+(an?\s+)?(option|answer|choice)\b/gi,
+      /\b(click|press|tap|select|choose|drag|drop)\s+(here|on|the|this|that)?\s*(next|previous|back|forward|continue|submit|menu|home|exit|button|link|icon)\b/gi,
+      /\b(next|previous|back|forward|first|last)\s+(page|slide|screen|section|chapter|lesson|module|button|link)\b/gi,
+      /\bnavigation\s+(menu|bar|controls?|buttons?|panel|sidebar)\b/gi,
+      /\b(start|begin|resume|restart|return|exit|quit|close)\s+(course|lesson|module|activity|quiz|assessment|test|exam)\b/gi,
+      /\bgo\s+to\s+(next|previous|main|home|menu|glossary|resources?)\b/gi,
+      /\b(select|choose|pick|mark)\s+(an?\s+)?(option|answer|choice|response|item)\b/gi,
       /\bmenu\s+button\b/gi,
-      /\bscorm\s+(player|navigation|controls?)\b/gi,
-      /\b(close|minimize|maximize)\s+window\b/gi,
+      /\bscorm\s+(player|navigation|controls?|api|wrapper|content)\b/gi,
+      /\b(close|minimize|maximize|expand|collapse)\s+(window|panel|section|menu)\b/gi,
       /\btable\s+of\s+contents\b/gi,
-      /\bglossary\b/gi,
-      /\bresources?\s+(panel|section)\b/gi,
-      /\bhelp\s+(menu|section|button)\b/gi,
+      /\bresources?\s+(panel|section|library|center)\b/gi,
+      /\bhelp\s+(menu|section|button|center|desk)\b/gi,
+      /\b(feedback|hint|explanation)\s+will\s+(appear|display|show)\b/gi,
+      /\b(correct|incorrect|right|wrong)\s+answer\b/gi,
+      /\byour\s+(score|progress|completion|results?)\b/gi,
     ];
 
-    // Remove button and UI element text patterns
+    // Remove button and UI element text patterns - more aggressive
     const uiPatterns = [
-      /\[?(button|btn|link|icon|image|video|audio|media)\]?:?\s*/gi,
-      /\b(loading|buffering|processing)\.{3}/gi,
-      /^\s*(home|menu|next|previous|back|forward|submit|close|exit|help|glossary|resources?|toc)\s*$/gmi,
-      /^[<>→←↑↓⇨⇦⇧⇩▶◀▲▼]+$/gm,
-      /^\s*[\d]+\s*\/\s*[\d]+\s*$/gm, // Page numbers like "1 / 10"
+      /\[?(button|btn|link|hyperlink|icon|image|video|audio|media|graphic)\]?:?\s*/gi,
+      /\b(loading|buffering|processing|please\s+wait)\.{3}/gi,
+      /^\s*(home|menu|next|previous|back|forward|submit|close|exit|help|glossary|resources?|toc|contents?|index)\s*$/gmi,
+      /^[<>→←↑↓⇨⇦⇧⇩▶◀▲▼»«]+$/gm,
+      /^\s*[\d]+\s*[\/\\-]\s*[\d]+\s*$/gm, // Page numbers
+      /^\s*page\s+\d+\s+(of\s+\d+)?\s*$/gmi,
+      /^\s*slide\s+\d+\s*$/gmi,
+      /\bclick\s+(here|this|the\s+button|the\s+link)\b/gi,
+      /\b(view|see|check|review)\s+(more|details?|information)\b/gi,
+      /\b(scroll\s+down|scroll\s+up|swipe|hover)\b/gi,
     ];
 
     // Remove accessibility and metadata patterns
     const metaPatterns = [
-      /\baria-label\b/gi,
+      /\baria-[a-z]+\b/gi,
       /\balt\s+text\b/gi,
       /\btitle\s+attribute\b/gi,
       /\b(screen|keyboard)\s+reader\b/gi,
-      /\bcopyright\s+©/gi,
+      /\bcopyright\s+[©Ⓒ]/gi,
       /\ball\s+rights\s+reserved\b/gi,
+      /\bpowered\s+by\b/gi,
+      /\bversion\s+\d+/gi,
     ];
 
     let cleaned = text;
@@ -167,14 +176,21 @@ export const TranscriptGenerator = ({ file, transcript: externalTranscript, onTr
     // Remove multiple spaces and clean up
     cleaned = cleaned.replace(/\s+/g, ' ').trim();
 
-    // Remove very short fragments (likely UI elements)
-    const lines = cleaned.split(/[.!?]\s+/);
-    const meaningfulLines = lines.filter(line => {
-      const words = line.trim().split(/\s+/);
-      return words.length >= 5; // Keep only sentences with 5+ words
+    // Split into sentences and filter
+    const sentences = cleaned.split(/[.!?]+\s+/);
+    const meaningfulSentences = sentences.filter(sentence => {
+      const words = sentence.trim().split(/\s+/);
+      
+      // Must have at least 8 words for academic content
+      if (words.length < 8) return false;
+      
+      // Must have some educational indicators
+      const hasEducationalWords = /\b(is|are|was|were|will|can|may|must|should|the|this|that|these|those|when|where|why|how|what|because|therefore|however|although|since|while)\b/i.test(sentence);
+      
+      return hasEducationalWords;
     });
 
-    return meaningfulLines.join('. ').trim();
+    return meaningfulSentences.join('. ').trim() + (meaningfulSentences.length > 0 ? '.' : '');
   };
 
   const extractTextFromHTML = (html: string): string => {
@@ -182,38 +198,55 @@ export const TranscriptGenerator = ({ file, transcript: externalTranscript, onTr
     const doc = parser.parseFromString(html, 'text/html');
     
     // Remove script, style, and navigation elements
-    doc.querySelectorAll('script, style, noscript, nav, .navigation, .nav-buttons, .controls, #navigation, #controls').forEach(el => el.remove());
+    doc.querySelectorAll('script, style, noscript, nav, header, footer, aside, .navigation, .nav-buttons, .controls, #navigation, #controls, [role="navigation"], [aria-label*="navigation"], [aria-label*="menu"]').forEach(el => el.remove());
     
-    // Remove common SCORM UI elements by class/id patterns
-    doc.querySelectorAll('[class*="nav"], [class*="menu"], [class*="button"], [id*="nav"], [id*="menu"], [id*="button"]').forEach(el => {
-      if (el.textContent && el.textContent.length < 50) { // Only remove short UI elements
-        el.remove();
-      }
-    });
+    // Remove common SCORM UI elements by class/id patterns - be more aggressive
+    doc.querySelectorAll('[class*="nav"], [class*="menu"], [class*="button"], [class*="btn"], [class*="control"], [class*="toolbar"], [id*="nav"], [id*="menu"], [id*="button"], [id*="control"], button, input, select, textarea').forEach(el => el.remove());
     
-    // Get text content
-    const text = doc.body?.textContent || '';
-    const rawText = text.replace(/\s+/g, ' ').trim();
+    // Focus on main content areas
+    const mainContent = doc.querySelector('main, article, [role="main"], .content, #content, .main, #main');
+    const text = mainContent?.textContent || doc.body?.textContent || '';
+    
+    // Remove HTML entities and normalize whitespace
+    const rawText = text
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&[a-z]+;/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
     
     // Clean academic content
     return cleanAcademicContent(rawText);
   };
 
   const extractTextFromJS = (js: string): string => {
-    // Extract strings from JavaScript
-    const stringRegex = /["'`]([^"'`]{20,}?)["'`]/g;
+    // Extract strings from JavaScript - focus on learning content
+    const stringRegex = /["'`]([^"'`]{30,500})["'`]/g; // Longer strings (30-500 chars) are more likely to be content
     const matches = [...js.matchAll(stringRegex)];
     const texts = matches.map(m => m[1]).filter(t => {
-      // Filter out code-like strings and navigation text
       const lower = t.toLowerCase();
-      return !t.includes('function') && 
-             !t.includes('return') && 
-             !t.includes('=>') &&
-             !t.match(/^[a-z]+$/i) && // Skip single words
-             !lower.includes('click') &&
-             !lower.includes('button') &&
-             !lower.includes('navigate') &&
-             !lower.includes('menu');
+      
+      // Skip code-like strings
+      if (t.includes('function') || t.includes('return') || t.includes('=>') || t.includes('var ') || t.includes('const ') || t.includes('let ')) {
+        return false;
+      }
+      
+      // Skip URLs and paths
+      if (t.includes('http') || t.includes('://') || t.includes('.com') || t.includes('.js') || t.includes('.css')) {
+        return false;
+      }
+      
+      // Skip navigation/UI text
+      if (lower.includes('click') || lower.includes('button') || lower.includes('navigate') || 
+          lower.includes('menu') || lower.includes('next page') || lower.includes('previous') ||
+          lower.includes('submit') || lower.includes('cancel')) {
+        return false;
+      }
+      
+      // Keep only educational content indicators
+      const hasEducationalIndicators = /\b(learn|understand|concept|theory|practice|example|definition|explain|describe|analyze|demonstrate)\b/i.test(t);
+      const hasMultipleSentences = (t.match(/[.!?]/g) || []).length >= 2;
+      
+      return hasEducationalIndicators || hasMultipleSentences;
     });
     
     const rawText = texts.join('\n\n');

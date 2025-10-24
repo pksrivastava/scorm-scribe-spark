@@ -47,7 +47,7 @@ export interface ScormAnalysis {
     html: ContentFile[];
     videos: MultimediaFile[];
     audio: MultimediaFile[];
-    images: string[];
+    images: MultimediaFile[];
     javascript: ContentFile[];
     css: string[];
     pdfs: ContentFile[];
@@ -195,7 +195,7 @@ const categorizeFiles = async (zip: JSZip): Promise<any> => {
     html: [] as ContentFile[],
     videos: [] as MultimediaFile[],
     audio: [] as MultimediaFile[],
-    images: [] as string[],
+    images: [] as MultimediaFile[],
     javascript: [] as ContentFile[],
     css: [] as string[],
     pdfs: [] as ContentFile[],
@@ -255,7 +255,17 @@ const categorizeFiles = async (zip: JSZip): Promise<any> => {
         })
       );
     } else if (imageExts.some(ext => lower.endsWith(ext))) {
-      categories.images.push(filename);
+      // Extract images with blobs for downloading
+      filePromises.push(
+        file.async('blob').then(blob => {
+          categories.images.push({
+            path: filename,
+            size: blob.size,
+            type: blob.type || 'image/jpeg',
+            blob
+          });
+        })
+      );
     } else if (lower.endsWith('.js')) {
       filePromises.push(
         file.async('string').then(content => {

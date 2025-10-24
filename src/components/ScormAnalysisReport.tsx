@@ -275,6 +275,182 @@ export const ScormAnalysisReport = ({ analysis }: ScormAnalysisReportProps) => {
             </AccordionItem>
           )}
 
+          {analysis.contentFiles.audio.length > 0 && (
+            <AccordionItem value="audio">
+              <AccordionTrigger>
+                <div className="flex items-center justify-between w-full pr-4">
+                  <span>Audio Files ({analysis.contentFiles.audio.length})</span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      downloadAllOfType(analysis.contentFiles.audio, 'audio');
+                    }}
+                    className="gap-2"
+                  >
+                    <Download className="w-3 h-3" />
+                    Download All
+                  </Button>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-1 max-h-64 overflow-y-auto">
+                  {analysis.contentFiles.audio.map((audio, idx: number) => (
+                    <div key={idx} className="p-2 bg-muted/50 rounded flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="text-sm font-mono text-foreground">{audio.path}</div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {(audio.size / 1024 / 1024).toFixed(2)} MB • {audio.type}
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => downloadFile(audio, 'audio')}
+                        className="gap-2"
+                      >
+                        <Download className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          )}
+
+          {analysis.contentFiles.images.length > 0 && (
+            <AccordionItem value="images">
+              <AccordionTrigger>
+                <div className="flex items-center justify-between w-full pr-4">
+                  <span>Images ({analysis.contentFiles.images.length})</span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      downloadAllOfType(analysis.contentFiles.images, 'images');
+                    }}
+                    className="gap-2"
+                  >
+                    <Download className="w-3 h-3" />
+                    Download All
+                  </Button>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-1 max-h-64 overflow-y-auto">
+                  {analysis.contentFiles.images.map((image, idx: number) => (
+                    <div key={idx} className="p-2 bg-muted/50 rounded flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="text-sm font-mono text-foreground">{image.path}</div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {(image.size / 1024).toFixed(2)} KB • {image.type}
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => downloadFile(image, 'image')}
+                        className="gap-2"
+                      >
+                        <Download className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          )}
+
+          {analysis.contentFiles.pdfs.length > 0 && (
+            <AccordionItem value="pdfs">
+              <AccordionTrigger>
+                <div className="flex items-center justify-between w-full pr-4">
+                  <span>PDF Files ({analysis.contentFiles.pdfs.length})</span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      downloadAllOfType(analysis.contentFiles.pdfs, 'pdfs');
+                    }}
+                    className="gap-2"
+                  >
+                    <Download className="w-3 h-3" />
+                    Download All
+                  </Button>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-1 max-h-64 overflow-y-auto">
+                  {analysis.contentFiles.pdfs.map((pdf, idx: number) => (
+                    <div key={idx} className="p-2 bg-muted/50 rounded flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="text-sm font-mono text-foreground">{pdf.path}</div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {(pdf.size / 1024).toFixed(2)} KB • {pdf.type}
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => downloadFile(pdf, 'pdf')}
+                        className="gap-2"
+                      >
+                        <Download className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          )}
+
+          {analysis.contentFiles.epubs.length > 0 && (
+            <AccordionItem value="epubs">
+              <AccordionTrigger>
+                <div className="flex items-center justify-between w-full pr-4">
+                  <span>EPUB Files ({analysis.contentFiles.epubs.length})</span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      downloadAllOfType(analysis.contentFiles.epubs, 'epubs');
+                    }}
+                    className="gap-2"
+                  >
+                    <Download className="w-3 h-3" />
+                    Download All
+                  </Button>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-1 max-h-64 overflow-y-auto">
+                  {analysis.contentFiles.epubs.map((epub, idx: number) => (
+                    <div key={idx} className="p-2 bg-muted/50 rounded flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="text-sm font-mono text-foreground">{epub.path}</div>
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {(epub.size / 1024).toFixed(2)} KB • {epub.type}
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => downloadFile(epub, 'epub')}
+                        className="gap-2"
+                      >
+                        <Download className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          )}
+
           {analysis.contentFiles.html.length > 0 && (
             <AccordionItem value="html">
               <AccordionTrigger>HTML Files ({analysis.contentFiles.html.length})</AccordionTrigger>

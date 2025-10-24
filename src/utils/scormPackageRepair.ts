@@ -38,7 +38,7 @@ export const validateAndRepairScormPackage = async (file: File): Promise<RepairR
       }
     }
 
-    // Validate manifest structure
+      // Validate manifest structure
     if (manifestFile) {
       const manifestContent = await manifestFile.async('string');
       const parser = new DOMParser();
@@ -48,15 +48,20 @@ export const validateAndRepairScormPackage = async (file: File): Promise<RepairR
       if (parseError) {
         issues.push('Malformed XML in manifest');
         
-        // Try to fix common XML issues
+        // Try to fix common XML issues more comprehensively
         let fixedXml = manifestContent
-          .replace(/&(?!amp;|lt;|gt;|quot;|apos;)/g, '&amp;')
-          .replace(/<([^>]+)>([^<]*)<\/\1\s*>/g, '<$1>$2</$1>');
+          .replace(/&(?!amp;|lt;|gt;|quot;|apos;|#\d+;|#x[0-9a-fA-F]+;)/g, '&amp;') // Fix unescaped ampersands
+          .replace(/<([^>]+)>([^<]*)<\/\1\s*>/g, '<$1>$2</$1>') // Fix tag spacing
+          .replace(/\s+xmlns:/g, ' xmlns:') // Fix namespace declarations
+          .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '') // Remove control characters
+          .replace(/&(?!amp;|lt;|gt;|quot;|apos;)/g, '&amp;'); // Second pass for ampersands
         
         const fixedDoc = parser.parseFromString(fixedXml, 'text/xml');
         if (!fixedDoc.querySelector('parsererror')) {
           contents.file('imsmanifest.xml', fixedXml);
           fixes.push('Fixed XML encoding issues in manifest');
+        } else {
+          warnings.push('Could not automatically fix XML errors - package may not work properly');
         }
       }
 
@@ -67,28 +72,59 @@ export const validateAndRepairScormPackage = async (file: File): Promise<RepairR
         warnings.push('Package may not have proper resource definitions');
       }
 
-      // Check for entry points
+      // Check for entry points and fix broken references
       let hasValidEntry = false;
+      const brokenEntries: string[] = [];
+      
       for (let i = 0; i < resources.length; i++) {
         const href = resources[i].getAttribute('href');
         if (href) {
-          const entryFile = contents.file(href);
+          // Try exact match first
+          let entryFile = contents.file(href);
+          
+          // Try case-insensitive match
+          if (!entryFile) {
+            const files = Object.keys(contents.files);
+            const caseInsensitiveMatch = files.find(f => f.toLowerCase() === href.toLowerCase());
+            if (caseInsensitiveMatch) {
+              entryFile = contents.file(caseInsensitiveMatch);
+              fixes.push(`Fixed case sensitivity for entry point: ${href} -> ${caseInsensitiveMatch}`);
+              
+              // Update manifest with correct case
+              const manifestContent = await manifestFile!.async('string');
+              const updatedManifest = manifestContent.replace(
+                new RegExp(`href=["']${href}["']`, 'g'),
+                `href="${caseInsensitiveMatch}"`
+              );
+              contents.file('imsmanifest.xml', updatedManifest);
+            }
+          }
+          
           if (entryFile) {
             hasValidEntry = true;
-            break;
           } else {
+            brokenEntries.push(href);
             issues.push(`Entry point not found: ${href}`);
-            
-            // Try to find similar files
-            const possibleFiles = Object.keys(contents.files).filter(f => 
-              f.toLowerCase().includes(href.toLowerCase().split('.')[0]) ||
-              f.toLowerCase().endsWith('.html') ||
-              f.toLowerCase().endsWith('.htm')
-            );
-            
-            if (possibleFiles.length > 0) {
-              warnings.push(`Possible alternative entry: ${possibleFiles[0]}`);
-            }
+          }
+        }
+      }
+      
+      // Try to fix broken entries
+      if (brokenEntries.length > 0) {
+        const allFiles = Object.keys(contents.files);
+        const htmlFiles = allFiles.filter(f => 
+          f.toLowerCase().endsWith('.html') || f.toLowerCase().endsWith('.htm')
+        );
+        
+        for (const brokenEntry of brokenEntries) {
+          // Find best match by filename similarity
+          const baseName = brokenEntry.split('/').pop()?.toLowerCase() || '';
+          const similarFile = htmlFiles.find(f => 
+            f.toLowerCase().includes(baseName.split('.')[0])
+          ) || htmlFiles[0];
+          
+          if (similarFile) {
+            warnings.push(`Possible alternative for ${brokenEntry}: ${similarFile}`);
           }
         }
       }
