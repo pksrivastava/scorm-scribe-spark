@@ -69,7 +69,10 @@ export const BulkScormUploader = ({ onComplete }: BulkScormUploaderProps) => {
         const filePath = `${Date.now()}-${fileData.file.name}`;
         const { error: uploadError } = await supabase.storage
           .from('scorm-packages')
-          .upload(filePath, fileData.file);
+          .upload(filePath, fileData.file, {
+            cacheControl: '3600',
+            upsert: true
+          });
 
         if (uploadError) throw uploadError;
 
